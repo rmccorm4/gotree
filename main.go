@@ -2,39 +2,52 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
-func Tree(root string) error {
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
+func tree(root, indent string) error {
+	fi, err := os.Stat(root)
+	if err != nil {
+		fmt.Errorf("Could not use stat %s: %v", root, err)
+	}
 
-		// Get filename from file info
-		filename := info.Name()
-
-		// Ignore hidden files
-		if filename[0] == '.' {
-			// Special error to stop recursing down the directory
-			return filepath.SkipDir
-		}
-
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			fmt.Errorf("Rel(%s, %s): %v", root, path, err)
-			return err
-		}
-
-		depth := len(strings.Split(rel, string(filepath.Separator)))
-
-		fmt.Printf("%s%s\n", strings.Repeat("  ", depth), filename)
+	fmt.Println(fi.Name())
+	if !fi.IsDir() {
 		return nil
-	})
-	return err
+	}
+
+	fis, err := ioutil.ReadDir(root)
+	if err != nil {
+		fmt.Errorf("Could not read dir %s: %v", root, err)
+	}
+
+	var names []string
+	for _, fi := range fis {
+		// Skip hidden files/directories
+		if fi.Name()[0] != '.' {
+			names = append(names, fi.Name())
+		}
+	}
+
+	for i, name := range names {
+		childIndent := "│  "
+		// If we're at the last child of this directory, print nice corner
+		if i == len(names)-1 {
+			fmt.Printf(indent + "└──")
+			childIndent = "   "
+		} else {
+			fmt.Printf(indent + "├──")
+		}
+
+		if err := tree(filepath.Join(root, name), indent+childIndent); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func main() {
@@ -44,9 +57,9 @@ func main() {
 	}
 
 	for _, arg := range args {
-		err := Tree(arg)
+		err := tree(arg, "")
 		if err != nil {
-			log.Printf("Tree %s: %v\n", arg, err)
+			log.Printf("tree %s: %v\n", arg, err)
 		}
 	}
 }
